@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>V-SQL | Query Visualizer & Logical Inspector</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        forest: {
+                            50: '#f4f6f3',
+                            100: '#e3e8e1',
+                            200: '#c5d1c2',
+                            300: '#9fb39a',
+                            400: '#799373',
+                            500: '#5c7856',
+                            600: '#476042',
+                            700: '#394d35',
+                            800: '#2e3e2b',
+                            900: '#1e281c',
+                            950: '#10170f'
+                        },
+                        earth: {
+                            bgDark: '#111813',
+                            cardDark: '#1A261E',
+                            textDark: '#E2EAE4',
+                            borderDark: '#2B3D30',
+                            accentDark: '#3D5A4B',
+                            btnDark: '#345E4C',
+                            btnHoverDark: '#28493B'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'Fira Code', 'Monaco', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Node SQL Parser CDN (PASTE HERE) -->
+    <script src="https://unpkg.com/node-sql-parser/umd/index.umd.js"></script>
+
+    <!-- Your Application Code (Must be below the parser CDN) -->
+    <script src="app.js" defer></script>
+</head>
+<body class="bg-earth-bgDark text-earth-textDark min-h-screen flex flex-col">
+
+    <header class="border-b border-earth-borderDark bg-earth-cardDark/90 backdrop-blur-md sticky top-0 z-50 px-4 lg:px-8 py-3.5">
+    <div class="max-w-7xl mx-auto flex items-center justify-between">
+        <div class="flex items-center gap-3">
+
+            <!-- QueryLens Logo -->
+            <div class="w-9 h-9 rounded-lg bg-forest-950 flex items-center justify-center border border-earth-borderDark p-1">
+                <svg class="w-full h-full" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <polygon points="12,29 46,10 46,90 12,71" fill="#10B981" />
+                    <polygon points="54,10 88,29 88,46 54,46" fill="#10B981" />
+                    <polygon points="54,54 88,54 88,71 54,90" fill="#10B981" />
+                </svg>
+            </div>
+
+            <div>
+                <!-- Fixed Title (Zero space between Query & Lens) -->
+                <h1 class="text-xl font-bold tracking-tight text-earth-textDark flex items-center gap-2">
+                    <span>Query<span class="text-emerald-400">Lens</span></span>
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-forest-800/80 text-emerald-300 border border-forest-700 font-medium">Visual Inspector</span>
+                </h1>
+                <p class="text-xs text-forest-300/80 font-normal">FROM K YOGESH SATHVIK</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2 text-xs text-forest-300/70">
+            <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            Forest Dark Theme
+        </div>
+    </div>
+</header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 lg:p-8 flex flex-col gap-6">
+
+        <!-- Input & Query Preset Workbench -->
+        <section class="bg-earth-cardDark rounded-xl border border-earth-borderDark p-4 md:p-5 shadow-sm">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                <label for="sqlInput" class="text-sm font-semibold tracking-wide flex items-center gap-2 text-earth-textDark">
+                    <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+                    </svg>
+                    SQL Query Input
+                </label>
+
+                <div class="flex flex-wrap items-center gap-1.5 text-xs">
+                    <span class="text-xs text-forest-300/70 mr-1 hidden sm:inline"></span>
+                </div>
+            </div>
+
+            <!-- Editor Input Box -->
+            <div class="relative rounded-lg overflow-hidden border border-earth-borderDark bg-forest-950/80 focus-within:ring-2 focus-within:ring-emerald-500/50 transition-all">
+                <textarea id="sqlInput" spellcheck="false" rows="6" class="code-editor w-full p-3.5 bg-transparent text-emerald-200 text-sm focus:outline-none resize-y leading-relaxed placeholder-forest-500" placeholder="Type or paste your SQL query here..."></textarea>
+            </div>
+
+            <!-- Action Toolbar -->
+            <div class="flex items-center justify-between mt-4">
+                <span class="text-xs text-forest-300/60 hidden md:inline">
+                    Automatic parsing &amp; error analysis triggered on click.
+                </span>
+                <button onclick="processQuery()" id="visualizeBtn" class="w-full sm:w-auto px-6 py-2.5 rounded-lg bg-earth-btnDark hover:bg-earth-btnHoverDark text-white font-medium text-sm transition-all shadow-md flex items-center justify-center gap-2 border border-emerald-600/30">
+                    <svg class="w-4 h-4 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    Visualize &amp; Inspect Query
+                </button>
+            </div>
+        </section>
+
+        <!-- Error & Bug Diagnostic Section -->
+        <section id="errorSection" class="bg-earth-cardDark rounded-xl border border-earth-borderDark p-4 md:p-5 shadow-sm hidden">
+            <div class="flex items-center gap-2 pb-3 mb-3 border-b border-earth-borderDark">
+                <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                <h2 class="text-sm font-semibold tracking-wide text-earth-textDark">Query Diagnostic &amp; Logic Inspection</h2>
+            </div>
+            <div id="diagnosticsContainer" class="space-y-3">
+                <!-- Dynamic Error/Warning Cards inserted here -->
+            </div>
+        </section>
+
+        <!-- Visual Diagram Canvas Section -->
+        <section class="bg-earth-cardDark rounded-xl border border-earth-borderDark p-4 md:p-5 shadow-sm flex flex-col gap-3">
+            <div class="flex items-center justify-between pb-2 border-b border-earth-borderDark">
+                <div class="flex items-center gap-2">
+                    <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/>
+                    </svg>
+                    <h2 class="text-sm font-semibold tracking-wide text-earth-textDark">Execution &amp; Logical Flow Diagram</h2>
+                </div>
+
+                <!-- Export PNG Button -->
+                <button id="exportPngBtn" onclick="exportVisualAsPNG()" class="px-3 py-1.5 rounded-lg bg-forest-900/60 hover:bg-forest-800 border border-earth-borderDark text-xs text-earth-textDark font-medium transition-colors flex items-center gap-1.5" title="Export diagram as PNG image">
+                    <svg class="w-3.5 h-3.5 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                    </svg>
+                    Export PNG
+                </button>
+            </div>
+
+            <!-- Flow SVG Visual Wrapper -->
+            <div id="visualCanvasContainer" class="canvas-grid rounded-lg border border-earth-borderDark bg-forest-950/40 min-h-[320px] flex items-center justify-center p-4 overflow-x-auto relative">
+                <div id="canvasPlaceholder" class="text-center p-6 text-forest-300/60">
+                    <svg class="w-12 h-12 mx-auto mb-2 opacity-40 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                    </svg>
+                    <p class="text-sm font-medium">Enter a query above and click "Visualize &amp; Inspect Query"</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Bottom Insights Grid: Witty Explanation & Optimization -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+            <!-- Conversational Explanation Box -->
+            <section class="bg-earth-cardDark rounded-xl border border-earth-borderDark p-4 md:p-5 shadow-sm flex flex-col">
+                <div class="flex items-center gap-2 pb-3 mb-3 border-b border-earth-borderDark">
+                    <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
+                    </svg>
+                    <h2 class="text-sm font-semibold tracking-wide text-earth-textDark">Under The Hood</h2>
+                    <span class="text-[10px] ml-auto px-2 py-0.5 rounded bg-forest-900/60 text-emerald-300 border border-forest-700/50"></span>
+                </div>
+
+                <div id="explanationContainer" class="flex-1 text-xs text-forest-200 leading-relaxed">
+                    <p class="text-forest-400/60 italic">Breakdown of what SQL is secretly doing will display here.</p>
+                </div>
+            </section>
+
+            <!-- Optimization & Latency Suggestions -->
+<section class="bg-earth-cardDark rounded-xl border border-earth-borderDark p-4 md:p-5 shadow-sm flex flex-col">
+    <div class="flex items-center gap-2 pb-3 mb-3 border-b border-earth-borderDark">
+
+        <!-- Replaced lightning icon with a clean Beta badge/icon -->
+        <span class="text-amber-400 font-semibold text-sm">β</span>
+
+        <h2 class="text-sm font-semibold tracking-wide text-earth-textDark">
+            Optimization &amp; Performance Suggestions (beta)
+        </h2>
+    </div>
+
+    <div id="optimizationContainer" class="flex-1 text-xs text-forest-200 leading-relaxed">
+        <p class="text-forest-400/60 italic">Automated recommendations for improving execution latency will display here.</p>
+    </div>
+</section>
+
+    <!-- Footer -->
+    <footer class="border-t border-earth-borderDark py-4 px-6 text-center text-xs text-forest-400/60">
+        QueryLens Database Workbench &bull; Client-Side Static Visualizer &amp; Parser Engine
+    </footer>
+
+    <!-- Hidden Canvas for Exporting SVG to PNG -->
+    <canvas id="exportCanvas" class="hidden"></canvas>
+
+</body>
+</html>
