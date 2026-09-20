@@ -184,34 +184,47 @@ function extractQueryStructure(sql, ast) {
         isSelectAll: false
     };
 
-    // Regex Fallback Extractor if AST structure varies
+    // Extract SELECT projection columns
+    const selectMatch = sql.match(/\bSELECT\s+(.*?)\s+\bFROM\b/is);
+    if (selectMatch) {
+        const selectStr = selectMatch[1].trim();
+        if (selectStr === '*' || selectStr.includes('*')) {
+            structure.isSelectAll = true;
+        }
+        structure.select = selectStr
+        .split(/,(?![^(]*\))/) // Split by comma outside parentheses
+        .map(s => s.trim())
+        .filter(Boolean);
+    }
+
+    // Extract FROM table
     const fromMatch = sql.match(/\bFROM\s+([`\w]+)/i);
     if (fromMatch) structure.from = fromMatch[1];
 
-    const whereMatch = sql.match(/\bWHERE\s+(.*?)(?=\bGROUP\b|\bORDER\b|\bLIMIT\b|$)/i);
+    // Extract WHERE clause
+    const whereMatch = sql.match(/\bWHERE\s+(.*?)(?=\bGROUP\s+BY\b|\bHAVING\b|\bORDER\s+BY\b|\bLIMIT\b|$)/is);
     if (whereMatch) structure.where = whereMatch[1].trim();
 
-    const groupMatch = sql.match(/\bGROUP\s+BY\s+(.*?)(?=\bHAVING\b|\bORDER\b|\bLIMIT\b|$)/i);
+    // Extract GROUP BY clause
+    const groupMatch = sql.match(/\bGROUP\s+BY\s+(.*?)(?=\bHAVING\b|\bORDER\s+BY\b|\bLIMIT\b|$)/is);
     if (groupMatch) structure.groupBy = groupMatch[1].trim();
 
-    const orderMatch = sql.match(/\bORDER\s+BY\s+(.*?)(?=\bLIMIT\b|$)/i);
+    // Extract ORDER BY clause
+    const orderMatch = sql.match(/\bORDER\s+BY\s+(.*?)(?=\bLIMIT\b|$)/is);
     if (orderMatch) structure.orderBy = orderMatch[1].trim();
 
+    // Extract LIMIT clause
     const limitMatch = sql.match(/\bLIMIT\s+(\d+)/i);
     if (limitMatch) structure.limit = limitMatch[1];
 
-    if (/\bSELECT\s+\*/i.test(sql)) {
-        structure.isSelectAll = true;
-    }
-
-    // Extract JOINs
-    const joinRegex = /\b(LEFT|RIGHT|INNER|CROSS)?\s*JOIN\s+([`\w]+)(?:\s+ON\s+(.*?))?(?=\bLEFT\b|\bRIGHT\b|\bINNER\b|\bCROSS\b|\bJOIN\b|\bWHERE\b|\bGROUP\b|\bORDER\b|\bLIMIT\b|$)/gi;
+    // Extract JOINs safely
+    const joinRegex = /\b(LEFT\s+OUTER|RIGHT\s+OUTER|FULL\s+OUTER|LEFT|RIGHT|INNER|CROSS)?\s*JOIN\s+([`\w]+)(?:\s+(?:AS\s+)?([`\w]+))?\s+ON\s+(.*?)(?=\b(?:LEFT|RIGHT|INNER|CROSS|FULL)?\s*JOIN\b|\bWHERE\b|\bGROUP\s+BY\b|\bHAVING\b|\bORDER\s+BY\b|\bLIMIT\b|$)/gis;
     let match;
     while ((match = joinRegex.exec(sql)) !== null) {
         structure.joins.push({
-            type: (match[1] || 'INNER').toUpperCase() + ' JOIN',
-            table: match[2],
-            condition: match[3] || 'Missing ON condition'
+            type: (match[1] || 'INNER').trim().toUpperCase() + ' JOIN',
+                             table: match[3] ? `${match[2]} AS ${match[3]}` : match[2],
+                             condition: match[4] ? match[4].trim() : 'Missing ON condition'
         });
     }
 
@@ -275,7 +288,7 @@ function renderDiagnostics(diagnostics) {
 }
 
 /**
- * 5. Dynamic SVG Flow Diagram Renderer
+ * 5. Dynamic SVG Flow Diagram Renderer (Native SVG Elements)
  */
 function renderVisualFlow(parsed) {
     const container = document.getElementById('visualCanvasContainer');
@@ -286,9 +299,9 @@ function renderVisualFlow(parsed) {
     rawNodes.push({
         type: 'source',
         title: 'FROM: ' + (parsed.from || 'Base Table'),
-        desc: 'Scan source table records',
-        color: '#2C4A3E',
-        icon: 'TABLE'
+                  desc: 'Scan source table records',
+                  color: '#2C4A3E',
+                  icon: 'TABLE'
     });
 
     if (parsed.joins && parsed.joins.length > 0) {
@@ -298,7 +311,7 @@ function renderVisualFlow(parsed) {
                 title: `${j.type} ${j.table}`,
                 desc: `ON: ${j.condition}`,
                 color: j.type.includes('LEFT') ? '#28493B' : '#345E4C',
-                icon: 'JOIN'
+                          icon: 'JOIN'
             });
         });
     }
@@ -328,8 +341,8 @@ function renderVisualFlow(parsed) {
         type: 'project',
         title: 'SELECT PROJECTION',
         desc: parsed.isSelectAll ? 'All columns (*)' : fieldsStr,
-        color: '#1C3A2B',
-        icon: 'SELECT'
+                  color: '#1C3A2B',
+                  icon: 'SELECT'
     });
 
     if (parsed.orderBy || parsed.limit) {
@@ -337,14 +350,14 @@ function renderVisualFlow(parsed) {
             type: 'output',
             title: 'ORDER / LIMIT',
             desc: [parsed.orderBy ? `Sort: ${parsed.orderBy}` : '', parsed.limit ? `Limit: ${parsed.limit}` : ''].filter(Boolean).join(' | '),
-            color: '#152C21',
-            icon: 'RESULT'
+                      color: '#152C21',
+                      icon: 'RESULT'
         });
     }
 
     const minWidth = 200;
     const maxWidth = 340;
-    const minHeight = 85;
+    const minHeight = 90;
     const horizontalGap = 40;
     const paddingHorizontal = 30;
 
@@ -378,17 +391,18 @@ function renderVisualFlow(parsed) {
 
     let svgContent = `
     <svg id="sqlFlowSvg" width="${totalWidth}" height="${svgHeight}" viewBox="0 0 ${totalWidth} ${svgHeight}" xmlns="http://www.w3.org/2000/svg" class="mx-auto block">
-        <defs>
-            <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stop-color="#345E4C" stop-opacity="0.8"/>
-                <stop offset="100%" stop-color="#10B981" stop-opacity="0.8"/>
-            </linearGradient>
-            <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                <path d="M 0 0 L 10 5 L 0 10 z" fill="#10B981"/>
-            </marker>
-        </defs>
+    <defs>
+    <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+    <stop offset="0%" stop-color="#345E4C" stop-opacity="0.8"/>
+    <stop offset="100%" stop-color="#10B981" stop-opacity="0.8"/>
+    </linearGradient>
+    <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#10B981"/>
+    </marker>
+    </defs>
     `;
 
+    // Render connection lines
     positionedNodes.forEach((node, index) => {
         if (index < positionedNodes.length - 1) {
             const nextNode = positionedNodes[index + 1];
@@ -398,34 +412,31 @@ function renderVisualFlow(parsed) {
             const y2 = centerY;
 
             svgContent += `
-                <path d="M ${x1} ${y1} C ${x1 + 20} ${y1}, ${x2 - 20} ${y2}, ${x2} ${y2}"
-                      stroke="url(#lineGrad)" stroke-width="2.5" fill="none" marker-end="url(#arrow)" />
+            <path d="M ${x1} ${y1} C ${x1 + 20} ${y1}, ${x2 - 20} ${y2}, ${x2} ${y2}"
+            stroke="url(#lineGrad)" stroke-width="2.5" fill="none" marker-end="url(#arrow)" />
             `;
         }
     });
 
+    // Render nodes using standard SVG shapes and text
     positionedNodes.forEach(node => {
         const y = centerY - (node.height / 2);
 
         svgContent += `
-            <g class="node-glow" transform="translate(${node.x}, ${y})">
-                <rect width="${node.width}" height="${node.height}" rx="10" fill="${node.color}" stroke="#3D5A4B" stroke-width="1.5" />
-                <foreignObject x="0" y="0" width="${node.width}" height="${node.height}">
-                    <div xmlns="http://www.w3.org/1999/xhtml" class="p-2.5 h-full flex flex-col justify-between text-left font-sans select-none leading-tight overflow-hidden">
-                        <div>
-                            <div class="inline-block bg-black/40 text-[#A7F3D0] text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border border-emerald-500/20 mb-1">
-                                ${escapeXml(node.icon)}
-                            </div>
-                            <div class="text-[11px] font-semibold text-earth-textDark truncate" title="${escapeXml(node.title)}">
-                                ${escapeXml(node.title)}
-                            </div>
-                        </div>
-                        <div class="text-[10px] text-forest-200/80 font-mono break-words line-clamp-3 leading-snug">
-                            ${escapeXml(node.desc)}
-                        </div>
-                    </div>
-                </foreignObject>
-            </g>
+        <g transform="translate(${node.x}, ${y})">
+        <!-- Background Box -->
+        <rect width="${node.width}" height="${node.height}" rx="10" fill="${node.color}" stroke="#3D5A4B" stroke-width="1.5" />
+
+        <!-- Icon Tag -->
+        <rect x="10" y="10" width="50" height="16" rx="4" fill="rgba(0,0,0,0.4)" stroke="rgba(16,185,129,0.2)" stroke-width="1"/>
+        <text x="35" y="21" fill="#A7F3D0" font-size="9" font-family="monospace" font-weight="bold" text-anchor="middle">${escapeXml(node.icon)}</text>
+
+        <!-- Title -->
+        <text x="10" y="42" fill="#E2E8F0" font-size="11" font-family="sans-serif" font-weight="600">${escapeXml(node.title)}</text>
+
+        <!-- Description -->
+        <text x="10" y="62" fill="#A7F3D0" font-size="10" font-family="monospace">${escapeXml(node.desc)}</text>
+        </g>
         `;
     });
 
@@ -444,7 +455,7 @@ function renderNarrativeExplanation(parsed, rawSql, errors) {
     const hasSyntaxError = errors.some(e => e.severity === 'ERROR' && e.type.toLowerCase().includes('syntax'));
     const hasAndOrBug = errors.some(e => e.type.includes('AND/OR'));
     const hasLeftJoinBug = errors.some(e => e.type.includes('LEFT JOIN'));
-    const hasJoin = parsed.joins.length > 0;
+    const hasJoin = Array.isArray(parsed.joins) && parsed.joins.length > 0;
     const hasAggregation = Boolean(parsed.groupBy) || /\b(COUNT|SUM|AVG|MIN|MAX)\s*\(/i.test(rawSql);
     const hasHaving = /\bHAVING\b/i.test(rawSql);
     const hasOrderBy = Boolean(parsed.orderBy);
@@ -676,4 +687,54 @@ function renderOptimizations(parsed = {}, rawSql = '', errors = []) {
     `;
 
     container.innerHTML = html;
+}
+
+/**
+ * Utility: Export SVG Visual Flow as PNG Image
+ */
+function exportVisualAsPNG() {
+    const svgElem = document.getElementById('sqlFlowSvg');
+    if (!svgElem) {
+        showNotification("No visual flow diagram available to export.");
+        return;
+    }
+
+    const serializer = new XMLSerializer();
+    let svgString = serializer.serializeToString(svgElem);
+
+    if (!svgString.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)) {
+        svgString = svgString.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+    }
+
+    const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+    const blobURL = (window.URL || window.webkitURL).createObjectURL(svgBlob);
+    const img = new Image();
+
+    const viewBox = svgElem.viewBox.baseVal;
+    const width = (viewBox && viewBox.width) ? viewBox.width : 800;
+    const height = (viewBox && viewBox.height) ? viewBox.height : 300;
+
+    img.onload = function () {
+        const canvas = document.createElement('canvas');
+        canvas.width = width * 2;
+        canvas.height = height * 2;
+        const ctx = canvas.getContext('2d');
+        ctx.scale(2, 2);
+
+        ctx.fillStyle = '#0D140D';
+        ctx.fillRect(0, 0, width, height);
+        ctx.drawImage(img, 0, 0);
+
+        const pngUrl = canvas.toDataURL('image/png');
+        const downloadLink = document.createElement('a');
+        downloadLink.href = pngUrl;
+        downloadLink.download = `querylens-flow-${Date.now()}.png`;
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+
+        URL.revokeObjectURL(blobURL);
+    };
+
+    img.src = blobURL;
 }
