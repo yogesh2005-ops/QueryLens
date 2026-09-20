@@ -1,6 +1,8 @@
 # QueryLens
 SQL query visualizer that helps analyze query logic, data flow, joins, grain, and potential performance issues.
 
+Check out: https://yogesh2005-ops.github.io/QueryLens/
+
 I suck at visualizing SQL execution order.
 
 So I built something to fix it!
@@ -120,7 +122,9 @@ The optimization suggestions are heuristic-based and should be reviewed against 
 
 Found a bug? Have a better idea? Got a query that breaks the tool?
 
-Feel free to open an issue or share your feedback.
+Feel free to open an issue or share your feedback at:
+
+https://www.linkedin.com/in/k-yogesh-sathvik/ or yogeshsai2005@gmail.com
 
 I'd rather you break it now than let it confidently give someone the wrong answer later.
 
