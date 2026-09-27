@@ -3,7 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>QueryLens | Query Visualizer & Logical Inspector</title>
+    <title>Query Lens | Visual Inspector</title>
+
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -13,196 +18,346 @@
             theme: {
                 extend: {
                     colors: {
-                        forest: {
-                            50: '#f4f6f3',
-                            100: '#e3e8e1',
-                            200: '#c5d1c2',
-                            300: '#9fb39a',
-                            400: '#799373',
-                            500: '#5c7856',
-                            600: '#476042',
-                            700: '#394d35',
-                            800: '#2e3e2b',
-                            900: '#1e281c',
-                            950: '#10170f'
-                        },
-                        earth: {
-                            bgDark: '#111813',
-                            cardDark: '#1A261E',
-                            textDark: '#E2EAE4',
-                            borderDark: '#2B3D30',
-                            accentDark: '#3D5A4B',
-                            btnDark: '#345E4C',
-                            btnHoverDark: '#28493B'
+                        glass: {
+                            bg: 'rgba(12, 26, 18, 0.55)',
+                            card: 'rgba(16, 35, 24, 0.45)',
+                            cardHover: 'rgba(22, 48, 33, 0.6)',
+                            border: 'rgba(52, 211, 153, 0.15)',
+                            borderHover: 'rgba(52, 211, 153, 0.35)',
+                            accent: '#10B981',
+                            accentGlow: 'rgba(16, 185, 129, 0.25)',
+                            mint: '#6EE7B7'
                         }
                     },
                     fontFamily: {
                         sans: ['Inter', 'sans-serif'],
-                        mono: ['JetBrains Mono', 'Fira Code', 'Monaco', 'monospace']
+                        mono: ['JetBrains Mono', 'monospace']
                     }
                 }
             }
         }
     </script>
 
-    <!-- Node SQL Parser CDN (PASTE HERE) -->
+    <link rel="stylesheet" href="styles.css">
+
+    <!-- Node SQL Parser CDN -->
     <script src="https://unpkg.com/node-sql-parser/umd/index.umd.js"></script>
 
-    <!-- Your Application Code (Must be below the parser CDN) -->
+    <!-- Application Code -->
     <script src="app.js" defer></script>
 </head>
-<body class="bg-earth-bgDark text-earth-textDark min-h-screen flex flex-col">
+<body class="bg-[#070f0a] text-slate-200 font-sans min-h-screen relative overflow-x-hidden">
 
-    <header class="border-b border-earth-borderDark bg-earth-cardDark/90 backdrop-blur-md sticky top-0 z-50 px-4 lg:px-8 py-3.5">
-    <div class="max-w-7xl mx-auto flex items-center justify-between">
-        <div class="flex items-center gap-3">
-
-            <!-- QueryLens Logo -->
-            <div class="w-9 h-9 rounded-lg bg-forest-950 flex items-center justify-center border border-earth-borderDark p-1">
-                <svg class="w-full h-full" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <polygon points="12,29 46,10 46,90 12,71" fill="#10B981" />
-                    <polygon points="54,10 88,29 88,46 54,46" fill="#10B981" />
-                    <polygon points="54,54 88,54 88,71 54,90" fill="#10B981" />
-                </svg>
-            </div>
-
-            <div>
-                <!-- Fixed Title (Zero space between Query & Lens) -->
-                <h1 class="text-xl font-bold tracking-tight text-earth-textDark flex items-center gap-2">
-                    <span>Query<span class="text-emerald-400">Lens</span></span>
-                    <span class="text-xs px-2 py-0.5 rounded-full bg-forest-800/80 text-emerald-300 border border-forest-700 font-medium">Visual Inspector</span>
-                </h1>
-                <p class="text-xs text-forest-300/80 font-normal">FROM K YOGESH SATHVIK</p>
-            </div>
-        </div>
-
-        <div class="flex items-center gap-2 text-xs text-forest-300/70">
-            <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            Forest Dark Theme
-        </div>
+    <!-- Ambient Forest Background Glowing Blobs -->
+    <div class="fixed inset-0 pointer-events-none z-0 overflow-hidden">
+        <div class="ambient-glow glow-1"></div>
+        <div class="ambient-glow glow-2"></div>
+        <div class="ambient-glow glow-3"></div>
+        <div class="forest-overlay"></div>
     </div>
-</header>
 
-    <!-- Main Content Area -->
-    <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 lg:p-8 flex flex-col gap-6">
+    <!-- MAIN APP WRAPPER -->
+    <div class="relative z-10 flex flex-col min-h-screen max-w-[1440px] mx-auto px-4 md:px-8 py-4 md:py-6 gap-6">
 
-        <!-- Input & Query Preset Workbench -->
-        <section class="bg-earth-cardDark rounded-xl border border-earth-borderDark p-4 md:p-5 shadow-sm">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-                <label for="sqlInput" class="text-sm font-semibold tracking-wide flex items-center gap-2 text-earth-textDark">
-                    <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+        <!-- 1. TOP GLASS NAVBAR -->
+        <header class="glass-panel rounded-2xl px-5 py-3.5 flex items-center justify-between shadow-2xl backdrop-blur-xl border border-glass-border">
+            <div class="flex items-center gap-3.5">
+                <!-- Logo -->
+                <div class="w-10 h-10 rounded-xl bg-emerald-950/80 flex items-center justify-center border border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.2)]">
+                    <svg class="w-6 h-6" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <polygon points="12,29 46,10 46,90 12,71" fill="#10B981" />
+                        <polygon points="54,10 88,29 88,46 54,46" fill="#34D399" />
+                        <polygon points="54,54 88,54 88,71 54,90" fill="#059669" />
                     </svg>
-                    SQL Query Input
-                </label>
-
-                <div class="flex flex-wrap items-center gap-1.5 text-xs">
-                    <span class="text-xs text-forest-300/70 mr-1 hidden sm:inline"></span>
+                </div>
+                <div>
+                    <div class="flex items-center gap-2">
+                        <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-1.5">
+                            Query<span class="text-emerald-400">Lens</span>
+                        </h1>
+                        <span class="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-500/30 font-medium">Visual Inspector</span>
+                    </div>
+                    <p class="text-[10px] tracking-wider text-emerald-400/60 uppercase font-semibold">FROM QUERY TO CLARITY</p>
                 </div>
             </div>
 
-            <!-- Editor Input Box -->
-            <div class="relative rounded-lg overflow-hidden border border-earth-borderDark bg-forest-950/80 focus-within:ring-2 focus-within:ring-emerald-500/50 transition-all">
-                <textarea id="sqlInput" spellcheck="false" rows="6" class="code-editor w-full p-3.5 bg-transparent text-emerald-200 text-sm focus:outline-none resize-y leading-relaxed placeholder-forest-500" placeholder="Type or paste your SQL query here..."></textarea>
+            <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2 text-xs text-emerald-300/80 bg-emerald-950/40 px-3 py-1.5 rounded-full border border-emerald-500/20">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>Forest Dark Theme</span>
+                </div>
             </div>
+        </header>
 
-            <!-- Action Toolbar -->
-            <div class="flex items-center justify-between mt-4">
-                <span class="text-xs text-forest-300/60 hidden md:inline">
-                    Automatic parsing &amp; error analysis triggered on click.
-                </span>
-                <button onclick="processQuery()" id="visualizeBtn" class="w-full sm:w-auto px-6 py-2.5 rounded-lg bg-earth-btnDark hover:bg-earth-btnHoverDark text-white font-medium text-sm transition-all shadow-md flex items-center justify-center gap-2 border border-emerald-600/30">
-                    <svg class="w-4 h-4 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+        <!-- LAYOUT CONTAINER WITH FLOATING SIDEBAR -->
+        <div class="flex flex-col lg:flex-row gap-6 flex-1 items-start">
+
+            <!-- 2. LEFT FLOATING GLASS SIDEBAR -->
+            <aside class="w-full lg:w-56 glass-panel rounded-2xl p-3 flex flex-row lg:flex-col gap-2 shrink-0 backdrop-blur-xl border border-glass-border sticky top-6 z-30">
+                <button id="navHome" onclick="switchTab('home')" class="nav-item active flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-emerald-200 transition-all duration-300 w-full text-left">
+                    <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 00-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
                     </svg>
-                    Visualize &amp; Inspect Query
+                    <span>Home</span>
                 </button>
-            </div>
-        </section>
 
-        <!-- Error & Bug Diagnostic Section -->
-        <section id="errorSection" class="bg-earth-cardDark rounded-xl border border-earth-borderDark p-4 md:p-5 shadow-sm hidden">
-            <div class="flex items-center gap-2 pb-3 mb-3 border-b border-earth-borderDark">
-                <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
-                </svg>
-                <h2 class="text-sm font-semibold tracking-wide text-earth-textDark">Query Diagnostic &amp; Logic Inspection</h2>
-            </div>
-            <div id="diagnosticsContainer" class="space-y-3">
-                <!-- Dynamic Error/Warning Cards inserted here -->
-            </div>
-        </section>
+                <button id="navExamples" onclick="openOverlay('examplesModal')" class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-400 hover:text-emerald-200 transition-all duration-300 w-full text-left">
+                    <svg class="w-4 h-4 text-emerald-400/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                    </svg>
+                    <span>Examples</span>
+                </button>
 
-        <!-- Visual Diagram Canvas Section -->
-        <section class="bg-earth-cardDark rounded-xl border border-earth-borderDark p-4 md:p-5 shadow-sm flex flex-col gap-3">
-            <div class="flex items-center justify-between pb-2 border-b border-earth-borderDark">
+                <button id="navHistory" onclick="openOverlay('historyModal')" class="nav-item flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-400 hover:text-emerald-200 transition-all duration-300 w-full text-left">
+                    <svg class="w-4 h-4 text-emerald-400/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <span>History</span>
+                </button>
+            </aside>
+
+            <!-- MAIN WORKSPACE -->
+            <main class="flex-1 w-full flex flex-col gap-6 min-w-0">
+
+                <!-- 3. HERO SECTION WITH FLOATING EXECUTION FLOW CARDS -->
+                <section class="glass-panel rounded-3xl p-6 md:p-8 relative overflow-hidden backdrop-blur-2xl border border-glass-border">
+                    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+                        <div class="lg:col-span-7 space-y-4">
+                            <h2 class="text-3xl md:text-4xl lg:text-5xl font-bold tracking-tight text-white leading-tight">
+                                See Your SQL<br/>
+                                Through a <span class="text-emerald-400 drop-shadow-[0_0_25px_rgba(16,185,129,0.4)]">Clearer Lens</span>
+                            </h2>
+                            <p class="text-slate-300/80 text-sm md:text-base max-w-lg leading-relaxed">
+                                Understand how your query executes, spot logic traps, and get optimization suggestions — all in one place.
+                            </p>
+                        </div>
+
+                        <!-- Hero Interactive Floating Glass Cards -->
+                        <div class="lg:col-span-5 relative h-56 md:h-64 flex items-center justify-center">
+                            <!-- Background Layer 1 -->
+                            <div class="floating-hero-card card-bg-2 absolute w-64 p-3 rounded-2xl glass-panel border border-emerald-500/20 text-[11px] font-mono text-emerald-300/50 shadow-xl select-none pointer-events-none">
+                                <div class="text-slate-400/40 font-sans text-[10px] mb-1 uppercase tracking-wider">Logical Order</div>
+                                <div>FROM → JOIN → WHERE → GROUP BY → HAVING → SELECT → ORDER BY</div>
+                            </div>
+
+                            <!-- Layer 2 Code Preview -->
+                            <div class="floating-hero-card card-bg-1 absolute w-72 p-3.5 rounded-2xl glass-panel border border-emerald-500/30 text-xs font-mono text-emerald-200/80 shadow-2xl space-y-1 select-none pointer-events-none">
+                                <div><span class="text-emerald-400 font-bold">SELECT</span> *</div>
+                                <div><span class="text-emerald-400 font-bold">FROM</span> orders o</div>
+                                <div><span class="text-emerald-400 font-bold">LEFT JOIN</span> customers c</div>
+                                <div class="pl-3 text-emerald-300/60">ON o.customer_id = c.id</div>
+                                <div><span class="text-emerald-400 font-bold">WHERE</span> c.status = 'active'</div>
+                                <div><span class="text-emerald-400 font-bold">GROUP BY</span> o.customer_id;</div>
+                            </div>
+
+                            <!-- Layer 3 Execution Flow Nodes -->
+                            <div class="floating-hero-card card-fg absolute right-2 md:right-4 w-44 p-3 rounded-2xl glass-panel border border-emerald-400/40 text-xs font-mono text-emerald-200 shadow-[0_0_30px_rgba(16,185,129,0.2)] space-y-1.5 select-none pointer-events-none">
+                                <div class="flex items-center gap-1.5 px-2 py-1 rounded bg-emerald-950/60 border border-emerald-500/30">
+                                    <span class="text-emerald-400">➔</span> <span>FROM</span>
+                                </div>
+                                <div class="text-center text-[10px] text-emerald-400/60">↓</div>
+                                <div class="flex items-center gap-1.5 px-2 py-1 rounded bg-emerald-950/60 border border-emerald-500/30">
+                                    <span class="text-emerald-400">➔</span> <span>JOIN</span>
+                                </div>
+                                <div class="text-center text-[10px] text-emerald-400/60">↓</div>
+                                <div class="flex items-center gap-1.5 px-2 py-1 rounded bg-emerald-950/60 border border-emerald-500/30">
+                                    <span class="text-emerald-400">➔</span> <span>WHERE</span>
+                                </div>
+                                <div class="text-center text-[10px] text-emerald-400/60">↓</div>
+                                <div class="flex items-center gap-1.5 px-2 py-1 rounded bg-emerald-950/60 border border-emerald-500/30">
+                                    <span class="text-emerald-400">➔</span> <span>GROUP BY</span>
+                                </div>
+                                <div class="text-center text-[10px] text-emerald-400/60">↓</div>
+                                <div class="flex items-center gap-1.5 px-2 py-1 rounded bg-emerald-950/60 border border-emerald-500/30">
+                                    <span class="text-emerald-400">➔</span> <span>SELECT</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 5. SQL QUERY WORKSPACE -->
+                <section class="glass-panel magnetic-card rounded-3xl p-5 md:p-6 backdrop-blur-2xl border border-glass-border shadow-2xl relative">
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                        <label for="sqlInput" class="text-base font-semibold text-white flex items-center gap-2">
+                            <span class="p-1.5 rounded-lg bg-emerald-950/80 border border-emerald-500/30 text-emerald-400">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/>
+                                </svg>
+                            </span>
+                            SQL Query Input
+                        </label>
+
+                        <button onclick="openOverlay('examplesModal')" class="text-xs text-emerald-300 hover:text-emerald-200 flex items-center gap-1 px-3 py-1.5 rounded-full bg-emerald-950/40 border border-emerald-500/20 transition-all hover:border-emerald-500/40">
+                            💡 Try an example →
+                        </button>
+                    </div>
+
+                    <!-- Textarea Editor Container -->
+                    <div class="relative rounded-2xl overflow-hidden border border-emerald-500/20 bg-[#050d08]/80 focus-within:border-emerald-500/50 transition-all shadow-inner">
+                        <textarea id="sqlInput" spellcheck="false" rows="6" class="code-editor w-full p-4 bg-transparent text-emerald-200 text-sm focus:outline-none resize-y leading-relaxed placeholder-emerald-800/60" placeholder="Type or paste your SQL query here..."></textarea>
+                    </div>
+
+                    <!-- Action Bar -->
+                    <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mt-4">
+                        <span class="text-xs text-slate-400/70 flex items-center gap-1.5">
+                            <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                            </svg>
+                            Auto-detects and analyzes your query in real-time
+                        </span>
+
+                        <button onclick="processQuery()" id="visualizeBtn" class="w-full sm:w-auto px-7 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 hover:from-emerald-500 hover:to-emerald-400 text-white font-medium text-sm transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_25px_rgba(16,185,129,0.5)] flex items-center justify-center gap-2 border border-emerald-300/30 cursor-pointer">
+                            <span>Visualize &amp; Inspect Query</span>
+                            <svg class="w-4 h-4 text-emerald-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3"/>
+                            </svg>
+                        </button>
+                    </div>
+                </section>
+
+                <!-- DIAGNOSTICS & LOGIC TRAPS MODAL/CARD (If errors or warnings exist) -->
+                <section id="errorSection" class="glass-panel rounded-2xl p-5 border border-amber-500/30 bg-amber-950/10 hidden backdrop-blur-xl">
+                    <div class="flex items-center gap-2 pb-3 mb-3 border-b border-amber-500/20">
+                        <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        <h3 class="text-sm font-semibold tracking-wide text-amber-200">Query Diagnostics &amp; Logic Inspection</h3>
+                    </div>
+                    <div id="diagnosticsContainer" class="space-y-3"></div>
+                </section>
+
+
+                <!-- VISUAL DIAGRAM CANVAS SECTION -->
+                <section id="visualDiagramSection" class="glass-panel rounded-3xl p-5 md:p-6 border border-glass-border backdrop-blur-2xl flex flex-col gap-4 shadow-xl">
+                    <div class="flex items-center justify-between pb-3 border-b border-emerald-500/15">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/>
+                            </svg>
+                            <h3 class="text-sm font-semibold tracking-wide text-white">Execution &amp; Logical Flow Diagram</h3>
+                        </div>
+
+                        <!-- Export PNG Button -->
+                        <button id="exportPngBtn" onclick="exportVisualAsPNG()" class="px-3.5 py-1.5 rounded-xl bg-emerald-950/60 hover:bg-emerald-900/80 border border-emerald-500/30 text-xs text-emerald-200 font-medium transition-all flex items-center gap-1.5 shadow-sm">
+                            <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                            </svg>
+                            <span>Export PNG</span>
+                        </button>
+                    </div>
+
+                    <!-- Flow SVG Visual Canvas -->
+                    <div id="visualCanvasContainer" class="canvas-grid rounded-2xl border border-emerald-500/10 bg-[#050d08]/60 min-h-[300px] flex items-center justify-center p-6 overflow-x-auto relative">
+                        <div id="canvasPlaceholder" class="text-center p-6 text-slate-400/60">
+                            <svg class="w-12 h-12 mx-auto mb-3 opacity-40 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                            </svg>
+                            <p class="text-sm font-medium">Enter a query above and click "Visualize &amp; Inspect Query"</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- 7. UNDER THE HOOD + OPTIMIZATION PANELS -->
+                <div id="underTheHoodGrid" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+                    <!-- UNDER THE HOOD -->
+                    <section class="glass-panel magnetic-card rounded-3xl p-5 md:p-6 border border-glass-border backdrop-blur-2xl flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between pb-3 mb-4 border-b border-emerald-500/15">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="w-8 h-8 rounded-lg bg-emerald-950/60 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5z"/>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0112 20.055a11.952 11.952 0 01-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"/>
+                                        </svg>
+                                    </div>
+                                    <h3 class="text-base font-semibold text-white">Under The Hood</h3>
+                                </div>
+                                <span class="w-6 h-6 rounded-full bg-emerald-950/80 border border-emerald-500/20 flex items-center justify-center text-xs text-emerald-400">➔</span>
+                            </div>
+
+                            <div id="explanationContainer" class="text-xs text-slate-300 leading-relaxed">
+                                <p class="text-slate-400/60 italic">Breakdown of what SQL is secretly doing will display here.</p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- OPTIMIZATION & PERFORMANCE SUGGESTIONS (beta) -->
+                    <section class="glass-panel magnetic-card rounded-3xl p-5 md:p-6 border border-glass-border backdrop-blur-2xl flex flex-col justify-between">
+                        <div>
+                            <div class="flex items-center justify-between pb-3 mb-4 border-b border-emerald-500/15">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="w-8 h-8 rounded-lg bg-emerald-950/60 border border-emerald-500/30 flex items-center justify-center text-amber-400 font-bold text-xs">
+                                        💡
+                                    </div>
+                                    <h3 class="text-base font-semibold text-white">Optimization &amp; Performance Suggestions <span class="text-xs text-emerald-400 font-normal">(beta)</span></h3>
+                                </div>
+                                <span class="w-6 h-6 rounded-full bg-emerald-950/80 border border-emerald-500/20 flex items-center justify-center text-xs text-emerald-400">➔</span>
+                            </div>
+
+                            <div id="optimizationContainer" class="text-xs text-slate-300 leading-relaxed">
+                                <p class="text-slate-400/60 italic">Automated recommendations for improving execution latency will display here.</p>
+                            </div>
+                        </div>
+                    </section>
+
+                </div>
+
+            </main>
+        </div>
+
+        <!-- FOOTER -->
+        <footer class="glass-panel rounded-2xl py-4 px-6 text-center text-xs text-slate-400/60 border border-glass-border mt-2">
+            <div class="flex flex-wrap items-center justify-center gap-2">
+                <span>SELECT</span>
+                <span>Query Lens</span>
+                <span>FROM</span>
+                <span>K Yogesh Sathvik</span>
+               
+            </div>
+        </footer>
+
+    </div>
+
+    <!-- OVERLAY / MODAL: EXAMPLES -->
+    <div id="examplesModal" class="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel rounded-3xl p-6 max-w-2xl w-full border border-glass-border shadow-2xl flex flex-col max-h-[85vh]">
+            <div class="flex items-center justify-between pb-4 border-b border-emerald-500/20">
                 <div class="flex items-center gap-2">
-                    <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/>
-                    </svg>
-                    <h2 class="text-sm font-semibold tracking-wide text-earth-textDark">Execution &amp; Logical Flow Diagram</h2>
+                    <span class="p-1.5 rounded-lg bg-emerald-950/80 text-emerald-400 border border-emerald-500/30">📚</span>
+                    <h3 class="text-lg font-bold text-white">SQL Example Library</h3>
                 </div>
-
-                <!-- Export PNG Button -->
-                <button id="exportPngBtn" onclick="exportVisualAsPNG()" class="px-3 py-1.5 rounded-lg bg-forest-900/60 hover:bg-forest-800 border border-earth-borderDark text-xs text-earth-textDark font-medium transition-colors flex items-center gap-1.5" title="Export diagram as PNG image">
-                    <svg class="w-3.5 h-3.5 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
-                    </svg>
-                    Export PNG
-                </button>
+                <button onclick="closeOverlay('examplesModal')" class="text-slate-400 hover:text-white p-1 rounded-lg">✕</button>
             </div>
 
-            <!-- Flow SVG Visual Wrapper -->
-            <div id="visualCanvasContainer" class="canvas-grid rounded-lg border border-earth-borderDark bg-forest-950/40 min-h-[320px] flex items-center justify-center p-4 overflow-x-auto relative">
-                <div id="canvasPlaceholder" class="text-center p-6 text-forest-300/60">
-                    <svg class="w-12 h-12 mx-auto mb-2 opacity-40 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-                    </svg>
-                    <p class="text-sm font-medium">Enter a query above and click "Visualize &amp; Inspect Query"</p>
+            <div id="examplesContainer" class="overflow-y-auto py-4 space-y-4 flex-1 pr-1">
+                <!-- Dynamic Examples injected here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- OVERLAY / MODAL: HISTORY -->
+    <div id="historyModal" class="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <div class="glass-panel rounded-3xl p-6 max-w-2xl w-full border border-glass-border shadow-2xl flex flex-col max-h-[85vh]">
+            <div class="flex items-center justify-between pb-4 border-b border-emerald-500/20">
+                <div class="flex items-center gap-2">
+                    <span class="p-1.5 rounded-lg bg-emerald-950/80 text-emerald-400 border border-emerald-500/30">📜</span>
+                    <h3 class="text-lg font-bold text-white">Analysis History</h3>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="clearHistory()" class="text-xs text-red-400 hover:text-red-300 px-3 py-1.5 rounded-xl bg-red-950/40 border border-red-500/30 transition-all">
+                        Clear History
+                    </button>
+                    <button onclick="closeOverlay('historyModal')" class="text-slate-400 hover:text-white p-1 rounded-lg">✕</button>
                 </div>
             </div>
-        </section>
 
-        <!-- Bottom Insights Grid: Witty Explanation & Optimization -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-            <!-- Conversational Explanation Box -->
-            <section class="bg-earth-cardDark rounded-xl border border-earth-borderDark p-4 md:p-5 shadow-sm flex flex-col">
-                <div class="flex items-center gap-2 pb-3 mb-3 border-b border-earth-borderDark">
-                    <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/>
-                    </svg>
-                    <h2 class="text-sm font-semibold tracking-wide text-earth-textDark">Under The Hood</h2>
-                    <span class="text-[10px] ml-auto px-2 py-0.5 rounded bg-forest-900/60 text-emerald-300 border border-forest-700/50"></span>
-                </div>
-
-                <div id="explanationContainer" class="flex-1 text-xs text-forest-200 leading-relaxed">
-                    <p class="text-forest-400/60 italic">Breakdown of what SQL is secretly doing will display here.</p>
-                </div>
-            </section>
-
-            <!-- Optimization & Latency Suggestions -->
-<section class="bg-earth-cardDark rounded-xl border border-earth-borderDark p-4 md:p-5 shadow-sm flex flex-col">
-    <div class="flex items-center gap-2 pb-3 mb-3 border-b border-earth-borderDark">
-
-        <!-- Replaced lightning icon with a clean Beta badge/icon -->
-        <span class="text-amber-400 font-semibold text-sm">β</span>
-
-        <h2 class="text-sm font-semibold tracking-wide text-earth-textDark">
-            Optimization &amp; Performance Suggestions (beta)
-        </h2>
+            <div id="historyContainer" class="overflow-y-auto py-4 space-y-3 flex-1 pr-1">
+                <!-- Dynamic History items injected here -->
+            </div>
+        </div>
     </div>
-
-    <div id="optimizationContainer" class="flex-1 text-xs text-forest-200 leading-relaxed">
-        <p class="text-forest-400/60 italic">Automated recommendations for improving execution latency will display here.</p>
-    </div>
-</section>
-
-    <!-- Footer -->
-    <footer class="border-t border-earth-borderDark py-4 px-6 text-center text-xs text-forest-400/60">
-        QueryLens Database Workbench &bull; Client-Side Static Visualizer &amp; Parser Engine
-    </footer>
 
     <!-- Hidden Canvas for Exporting SVG to PNG -->
     <canvas id="exportCanvas" class="hidden"></canvas>
