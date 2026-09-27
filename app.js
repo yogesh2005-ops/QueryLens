@@ -1,5 +1,20 @@
 /**
- * Utility: HTML Escaper to prevent XSS / UI Breaks
+ * Query Lens — Core JavaScript
+ * Preserves all SQL parsing, visualization, diagnostics, explanation, & optimization functionality.
+ * Adds History (localStorage), Examples Library, and Proximity Micro-interactions.
+ */
+
+// Global state
+let analysisHistory = [];
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadHistory();
+    initExamples();
+    setupProximityInteractions();
+});
+
+/**
+ * Utility: HTML Escaper
  */
 function escapeXml(unsafe) {
     if (typeof unsafe !== 'string') return unsafe || '';
@@ -15,43 +30,42 @@ function escapeXml(unsafe) {
 }
 
 /**
- * Helper to safely instantiate NodeSQLParser across UMD / Browser builds
+ * Instantiate SQL Parser across UMD builds
  */
 function getParserInstance() {
-    // 1. Standard global constructor: new NodeSQLParser.Parser()
     if (typeof NodeSQLParser !== 'undefined' && typeof NodeSQLParser.Parser === 'function') {
         return new NodeSQLParser.Parser();
     }
-    // 2. Direct class export: new NodeSQLParser()
     if (typeof NodeSQLParser === 'function') {
         return new NodeSQLParser();
     }
-    // 3. Object export with direct method: window.NodeSQLParser
     if (typeof NodeSQLParser !== 'undefined' && typeof NodeSQLParser.astify === 'function') {
         return NodeSQLParser;
     }
-    // 4. Fallback global: new Parser()
     if (typeof Parser === 'function') {
         return new Parser();
     }
     return null;
 }
 
-/**
- * Helper UI Notifications
- */
 function showNotification(msg) {
     alert(msg);
 }
 
 function clearVisuals() {
     const canvas = document.getElementById('visualCanvasContainer');
-    if (canvas) canvas.innerHTML = '';
+    if (canvas) canvas.innerHTML = '<div class="text-center p-6 text-slate-400/60"><p class="text-sm">Unable to generate diagram for invalid query.</p></div>';
+}
+
+function scrollToSection(id) {
+    const elem = document.getElementById(id);
+    if (elem) {
+        elem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
 }
 
 /**
  * Main Processing Workflow
- * 1. Validate Syntax with AST Parser -> 2. Inspect Logic Traps -> 3. Render Visuals
  */
 function processQuery() {
     const inputElem = document.getElementById('sqlInput');
@@ -63,33 +77,39 @@ function processQuery() {
         return;
     }
 
-    // Step 1: Syntax Parsing via Node SQL Parser
+    // 1. Syntax Parsing via Node SQL Parser
     const syntaxResult = parseSQLSyntax(rawSql);
 
     if (syntaxResult.error) {
-        // Show diagnostic panel with syntax error and stop flow
         renderDiagnostics([syntaxResult.error]);
         clearVisuals();
         renderNarrativeExplanation({}, rawSql, [syntaxResult.error]);
         renderOptimizations({}, rawSql, [syntaxResult.error]);
+        saveToHistory(rawSql, 'error', 'Syntax error detected');
         return;
     }
 
-    // Step 2: Analyze AST & String Patterns for Logical Traps
+    // 2. Analyze AST & Logic Traps
     const logicalWarnings = inspectSQLLogic(rawSql, syntaxResult.ast);
     renderDiagnostics(logicalWarnings);
 
-    // Step 3: Extract Structure for Visual Flow Diagram
+    // 3. Extract Structure for Visual Diagram
     const parsedStructure = extractQueryStructure(rawSql, syntaxResult.ast);
 
-    // Step 4: Render SVG Flow, Narrative, & Optimizations
+    // 4. Render Flow, Explanation, & Optimizations
     renderVisualFlow(parsedStructure);
     renderNarrativeExplanation(parsedStructure, rawSql, logicalWarnings);
     renderOptimizations(parsedStructure, rawSql, logicalWarnings);
+
+    // 5. Save to Local History
+    const issueSummary = logicalWarnings.length > 0 
+        ? `${logicalWarnings.length} issue(s) flagged` 
+        : 'Valid Query';
+    saveToHistory(rawSql, logicalWarnings.length > 0 ? 'warning' : 'success', issueSummary);
 }
 
 /**
- * 1. Real SQL Syntax Parser
+ * 1. SQL Syntax Parser Engine
  */
 function parseSQLSyntax(sql) {
     const parser = getParserInstance();
@@ -108,7 +128,6 @@ function parseSQLSyntax(sql) {
     }
 
     try {
-        // Fix: Changed 'MySQL' (capitalized) to 'mysql' (lowercase)
         const ast = parser.astify(sql, { database: 'mysql' });
         return { ast: ast, error: null };
     } catch (err) {
@@ -127,7 +146,7 @@ function parseSQLSyntax(sql) {
                 severity: 'SYNTAX_ERROR',
                 type: 'Syntax Error (Grammar Compiler)',
                 desc: errorMsg,
-                location: line && column ? `Line ${line}, Column ${column}` : 'Unknown position',
+                location: line && column ? `Line ${line}, Column${column}` : 'Unknown position',
                 fix: 'Check for missing/misspelled keywords, unclosed clauses, or trailing commas near the error location.'
             }
         };
@@ -135,12 +154,11 @@ function parseSQLSyntax(sql) {
 }
 
 /**
- * 2. Logical & Performance Trap Inspector
+ * 2. Logic Trap Inspector
  */
 function inspectSQLLogic(sql, ast) {
     const warnings = [];
 
-    // Check AND/OR Precedence
     if (/\bWHERE\b.*\bOR\b.*\bAND\b/i.test(sql) && !/\(.*OR.*\)/i.test(sql)) {
         warnings.push({
             severity: 'LOGIC_TRAP',
@@ -151,7 +169,6 @@ function inspectSQLLogic(sql, ast) {
         });
     }
 
-    // Check LEFT JOIN converted to INNER JOIN
     if (/\bLEFT\s+JOIN\b/i.test(sql) && /\bWHERE\b/i.test(sql)) {
         const whereClause = sql.split(/\bWHERE\b/i)[1] || '';
         if (/=\s*'[^']*'|=\s*\d+|IS NOT NULL/i.test(whereClause) && !/IS NULL/i.test(whereClause)) {
@@ -184,7 +201,6 @@ function extractQueryStructure(sql, ast) {
         isSelectAll: false
     };
 
-    // Extract SELECT projection columns
     const selectMatch = sql.match(/\bSELECT\s+(.*?)\s+\bFROM\b/is);
     if (selectMatch) {
         const selectStr = selectMatch[1].trim();
@@ -192,39 +208,33 @@ function extractQueryStructure(sql, ast) {
             structure.isSelectAll = true;
         }
         structure.select = selectStr
-        .split(/,(?![^(]*\))/) // Split by comma outside parentheses
-        .map(s => s.trim())
-        .filter(Boolean);
+            .split(/,(?![^(]*\))/)
+            .map(s => s.trim())
+            .filter(Boolean);
     }
 
-    // Extract FROM table
     const fromMatch = sql.match(/\bFROM\s+([`\w]+)/i);
     if (fromMatch) structure.from = fromMatch[1];
 
-    // Extract WHERE clause
     const whereMatch = sql.match(/\bWHERE\s+(.*?)(?=\bGROUP\s+BY\b|\bHAVING\b|\bORDER\s+BY\b|\bLIMIT\b|$)/is);
     if (whereMatch) structure.where = whereMatch[1].trim();
 
-    // Extract GROUP BY clause
     const groupMatch = sql.match(/\bGROUP\s+BY\s+(.*?)(?=\bHAVING\b|\bORDER\s+BY\b|\bLIMIT\b|$)/is);
     if (groupMatch) structure.groupBy = groupMatch[1].trim();
 
-    // Extract ORDER BY clause
     const orderMatch = sql.match(/\bORDER\s+BY\s+(.*?)(?=\bLIMIT\b|$)/is);
     if (orderMatch) structure.orderBy = orderMatch[1].trim();
 
-    // Extract LIMIT clause
     const limitMatch = sql.match(/\bLIMIT\s+(\d+)/i);
     if (limitMatch) structure.limit = limitMatch[1];
 
-    // Extract JOINs safely
     const joinRegex = /\b(LEFT\s+OUTER|RIGHT\s+OUTER|FULL\s+OUTER|LEFT|RIGHT|INNER|CROSS)?\s*JOIN\s+([`\w]+)(?:\s+(?:AS\s+)?([`\w]+))?\s+ON\s+(.*?)(?=\b(?:LEFT|RIGHT|INNER|CROSS|FULL)?\s*JOIN\b|\bWHERE\b|\bGROUP\s+BY\b|\bHAVING\b|\bORDER\s+BY\b|\bLIMIT\b|$)/gis;
     let match;
     while ((match = joinRegex.exec(sql)) !== null) {
         structure.joins.push({
             type: (match[1] || 'INNER').trim().toUpperCase() + ' JOIN',
-                             table: match[3] ? `${match[2]} AS ${match[3]}` : match[2],
-                             condition: match[4] ? match[4].trim() : 'Missing ON condition'
+            table: match[3] ? `${match[2]} AS ${match[3]}` : match[2],
+            condition: match[4] ? match[4].trim() : 'Missing ON condition'
         });
     }
 
@@ -241,46 +251,41 @@ function renderDiagnostics(diagnostics) {
 
     if (!diagnostics || diagnostics.length === 0) {
         if (section) section.classList.add('hidden');
-        container.innerHTML = `
-        <div class="p-3 rounded-lg bg-emerald-950/30 border border-emerald-700/40 text-xs text-emerald-300">
-        ✓ No syntax errors or logical traps detected.
-        </div>
-        `;
+        container.innerHTML = '';
         return;
     }
 
-    // Unhide the diagnostic section when issues exist
     if (section) section.classList.remove('hidden');
 
     let html = '<div class="space-y-2.5">';
     diagnostics.forEach(diag => {
         const isError = diag.severity === 'SYNTAX_ERROR';
-        const badgeColor = isError ? 'bg-red-900/50 text-red-300 border-red-700/60' : 'bg-amber-900/50 text-amber-300 border-amber-700/60';
+        const badgeColor = isError ? 'bg-red-950/80 text-red-300 border-red-500/40' : 'bg-amber-950/80 text-amber-300 border-amber-500/40';
 
         html += `
-        <div class="p-3 rounded-lg bg-forest-950/60 border border-earth-borderDark/60 space-y-1.5">
-        <div class="flex items-center justify-between">
-        <span class="font-semibold text-xs text-earth-textDark flex items-center gap-1.5">
-        <span class="w-2 h-2 rounded-full ${isError ? 'bg-red-400' : 'bg-amber-400'}"></span>
-        ${escapeXml(diag.type)}
-        </span>
-        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded border ${badgeColor}">
-        ${escapeXml(diag.severity)}
-        </span>
-        </div>
-        <div class="text-[11px] font-mono text-amber-200/80">
-        📍 Location: ${escapeXml(diag.location)}
-        </div>
-        <p class="text-xs text-forest-200/90 leading-relaxed bg-black/30 p-2 rounded">
-        ${escapeXml(diag.desc)}
-        </p>
-        ${diag.fix ? `
-            <div class="text-xs text-emerald-300/90 bg-emerald-950/40 p-2 rounded border border-emerald-800/40">
-            💡 <b>Suggested Fix:</b> ${escapeXml(diag.fix)}
+            <div class="p-3.5 rounded-xl bg-black/40 border border-emerald-500/10 space-y-2">
+                <div class="flex items-center justify-between">
+                    <span class="font-semibold text-xs text-slate-200 flex items-center gap-2">
+                        <span class="w-2 h-2 rounded-full ${isError ? 'bg-red-400 animate-pulse' : 'bg-amber-400'}"></span>
+                        ${escapeXml(diag.type)}
+                    </span>
+                    <span class="text-[10px] font-mono px-2 py-0.5 rounded-full border ${badgeColor}">
+                        ${escapeXml(diag.severity)}
+                    </span>
+                </div>
+                <div class="text-[11px] font-mono text-amber-300/80">
+                    📍 Location: ${escapeXml(diag.location)}
+                </div>
+                <p class="text-xs text-slate-300/90 leading-relaxed bg-black/30 p-2.5 rounded-lg border border-white/5">
+                    ${escapeXml(diag.desc)}
+                </p>
+                ${diag.fix ? `
+                    <div class="text-xs text-emerald-300/90 bg-emerald-950/40 p-2.5 rounded-lg border border-emerald-500/30">
+                        💡 <b>Suggested Fix:</b> ${escapeXml(diag.fix)}
+                    </div>
+                ` : ''}
             </div>
-            ` : ''}
-            </div>
-            `;
+        `;
     });
     html += '</div>';
 
@@ -288,7 +293,7 @@ function renderDiagnostics(diagnostics) {
 }
 
 /**
- * 5. Dynamic SVG Flow Diagram Renderer (Native SVG Elements)
+ * 5. Dynamic SVG Flow Diagram Renderer
  */
 function renderVisualFlow(parsed) {
     const container = document.getElementById('visualCanvasContainer');
@@ -299,9 +304,10 @@ function renderVisualFlow(parsed) {
     rawNodes.push({
         type: 'source',
         title: 'FROM: ' + (parsed.from || 'Base Table'),
-                  desc: 'Scan source table records',
-                  color: '#2C4A3E',
-                  icon: 'TABLE'
+        desc: 'Scan source table records',
+        color: '#0d2818',
+        borderColor: '#10b981',
+        icon: 'TABLE'
     });
 
     if (parsed.joins && parsed.joins.length > 0) {
@@ -310,8 +316,9 @@ function renderVisualFlow(parsed) {
                 type: 'join',
                 title: `${j.type} ${j.table}`,
                 desc: `ON: ${j.condition}`,
-                color: j.type.includes('LEFT') ? '#28493B' : '#345E4C',
-                          icon: 'JOIN'
+                color: '#0f321e',
+                borderColor: '#34d399',
+                icon: 'JOIN'
             });
         });
     }
@@ -321,7 +328,8 @@ function renderVisualFlow(parsed) {
             type: 'filter',
             title: 'WHERE FILTER',
             desc: parsed.where,
-            color: '#385243',
+            color: '#133a24',
+            borderColor: '#6ee7b7',
             icon: 'FILTER'
         });
     }
@@ -330,8 +338,9 @@ function renderVisualFlow(parsed) {
         rawNodes.push({
             type: 'aggregate',
             title: 'GROUP BY',
-            desc: `Partition by: ${parsed.groupBy}`,
-            color: '#2D4D3E',
+            desc: `Partition: ${parsed.groupBy}`,
+            color: '#0e2b1b',
+            borderColor: '#10b981',
             icon: 'GROUP'
         });
     }
@@ -341,8 +350,9 @@ function renderVisualFlow(parsed) {
         type: 'project',
         title: 'SELECT PROJECTION',
         desc: parsed.isSelectAll ? 'All columns (*)' : fieldsStr,
-                  color: '#1C3A2B',
-                  icon: 'SELECT'
+        color: '#081d12',
+        borderColor: '#059669',
+        icon: 'SELECT'
     });
 
     if (parsed.orderBy || parsed.limit) {
@@ -350,13 +360,14 @@ function renderVisualFlow(parsed) {
             type: 'output',
             title: 'ORDER / LIMIT',
             desc: [parsed.orderBy ? `Sort: ${parsed.orderBy}` : '', parsed.limit ? `Limit: ${parsed.limit}` : ''].filter(Boolean).join(' | '),
-                      color: '#152C21',
-                      icon: 'RESULT'
+            color: '#05140c',
+            borderColor: '#047857',
+            icon: 'RESULT'
         });
     }
 
     const minWidth = 200;
-    const maxWidth = 340;
+    const maxWidth = 320;
     const minHeight = 90;
     const horizontalGap = 40;
     const paddingHorizontal = 30;
@@ -393,16 +404,15 @@ function renderVisualFlow(parsed) {
     <svg id="sqlFlowSvg" width="${totalWidth}" height="${svgHeight}" viewBox="0 0 ${totalWidth} ${svgHeight}" xmlns="http://www.w3.org/2000/svg" class="mx-auto block">
     <defs>
     <linearGradient id="lineGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-    <stop offset="0%" stop-color="#345E4C" stop-opacity="0.8"/>
-    <stop offset="100%" stop-color="#10B981" stop-opacity="0.8"/>
+    <stop offset="0%" stop-color="#059669" stop-opacity="0.8"/>
+    <stop offset="100%" stop-color="#34D399" stop-opacity="0.8"/>
     </linearGradient>
     <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-    <path d="M 0 0 L 10 5 L 0 10 z" fill="#10B981"/>
+    <path d="M 0 0 L 10 5 L 0 10 z" fill="#34D399"/>
     </marker>
     </defs>
     `;
 
-    // Render connection lines
     positionedNodes.forEach((node, index) => {
         if (index < positionedNodes.length - 1) {
             const nextNode = positionedNodes[index + 1];
@@ -418,24 +428,19 @@ function renderVisualFlow(parsed) {
         }
     });
 
-    // Render nodes using standard SVG shapes and text
     positionedNodes.forEach(node => {
         const y = centerY - (node.height / 2);
 
         svgContent += `
         <g transform="translate(${node.x}, ${y})">
-        <!-- Background Box -->
-        <rect width="${node.width}" height="${node.height}" rx="10" fill="${node.color}" stroke="#3D5A4B" stroke-width="1.5" />
+        <rect width="${node.width}" height="${node.height}" rx="16" fill="${node.color}" stroke="${node.borderColor}" stroke-opacity="0.4" stroke-width="1.5" />
 
-        <!-- Icon Tag -->
-        <rect x="10" y="10" width="50" height="16" rx="4" fill="rgba(0,0,0,0.4)" stroke="rgba(16,185,129,0.2)" stroke-width="1"/>
-        <text x="35" y="21" fill="#A7F3D0" font-size="9" font-family="monospace" font-weight="bold" text-anchor="middle">${escapeXml(node.icon)}</text>
+        <rect x="12" y="12" width="55" height="18" rx="6" fill="rgba(0,0,0,0.5)" stroke="${node.borderColor}" stroke-opacity="0.3" stroke-width="1"/>
+        <text x="39.5" y="24" fill="#6EE7B7" font-size="9" font-family="monospace" font-weight="bold" text-anchor="middle">${escapeXml(node.icon)}</text>
 
-        <!-- Title -->
-        <text x="10" y="42" fill="#E2E8F0" font-size="11" font-family="sans-serif" font-weight="600">${escapeXml(node.title)}</text>
+        <text x="12" y="46" fill="#F8FAFC" font-size="11" font-family="sans-serif" font-weight="600">${escapeXml(node.title)}</text>
 
-        <!-- Description -->
-        <text x="10" y="62" fill="#A7F3D0" font-size="10" font-family="monospace">${escapeXml(node.desc)}</text>
+        <text x="12" y="66" fill="#A7F3D0" font-size="10" font-family="monospace">${escapeXml(node.desc)}</text>
         </g>
         `;
     });
@@ -452,7 +457,7 @@ function renderNarrativeExplanation(parsed, rawSql, errors) {
     const lines = [];
     const add = (text) => lines.push(text);
 
-    const hasSyntaxError = errors.some(e => e.severity === 'ERROR' && e.type.toLowerCase().includes('syntax'));
+    const hasSyntaxError = errors.some(e => e.severity === 'SYNTAX_ERROR' || (e.severity === 'ERROR' && e.type.toLowerCase().includes('syntax')));
     const hasAndOrBug = errors.some(e => e.type.includes('AND/OR'));
     const hasLeftJoinBug = errors.some(e => e.type.includes('LEFT JOIN'));
     const hasJoin = Array.isArray(parsed.joins) && parsed.joins.length > 0;
@@ -465,155 +470,94 @@ function renderNarrativeExplanation(parsed, rawSql, errors) {
         add('<b>1. Goal:</b> The query cannot be analyzed reliably until its syntax errors are fixed.');
         add('<b>2. Rule:</b> First make the query valid; then inspect what happens to the data at every stage.');
     } else {
-        add(`<b>1. Goal:</b> The query is trying to return <code>${escapeXml(selectedColumns)}</code> from <code>${escapeXml(parsed.from || 'the source table')}</code>. Check whether that answers the business question.`);
-
-        add(`<b>2. Tables:</b> Start with <code>${escapeXml(parsed.from || 'the base table')}</code>${hasJoin ? ` and connect ${parsed.joins.length} joined table(s).` : '. No additional tables are involved.'}`);
-
-        add(`<b>3. Grain:</b> Before reading the result, define what one row represents${parsed.groupBy ? `; GROUP BY suggests a grouped grain of <code>${escapeXml(parsed.groupBy)}</code>.` : hasAggregation ? '; an aggregate may change the result from row-level detail to a summary.' : '; currently, matching source rows are the likely grain.'}`);
-
-        add(`<b>4. Data flow:</b> Read it as <code>FROM → JOIN → WHERE${hasAggregation ? ' → GROUP BY' : ''}${hasHaving ? ' → HAVING' : ''} → SELECT${hasOrderBy ? ' → ORDER BY' : ''}</code>. Each stage changes or presents the data differently.`);
+        add(`<b>1. Goal:</b> Returns <code>${escapeXml(selectedColumns)}</code> from <code>${escapeXml(parsed.from || 'the source table')}</code>.`);
+        add(`<b>2. Tables:</b> Scans <code>${escapeXml(parsed.from || 'the base table')}</code>${hasJoin ? ` and connects ${parsed.joins.length} joined table(s).` : '.'}`);
+        add(`<b>3. Grain:</b> ${parsed.groupBy ? `Grouped grain of <code>${escapeXml(parsed.groupBy)}</code>.` : hasAggregation ? 'Aggregated summary grain.' : 'Source row level.'}`);
+        add(`<b>4. Data Flow:</b> Executed as <code>FROM → JOIN → WHERE${hasAggregation ? ' → GROUP BY' : ''}${hasHaving ? ' → HAVING' : ''} → SELECT${hasOrderBy ? ' → ORDER BY' : ''}</code>.`);
 
         if (hasJoin) {
-            add(`<b>5. JOIN check:</b> Inspect the relationship and cardinality. If one row matches multiple rows, the JOIN can multiply records before aggregation.`);
-        } else {
-            add('<b>5. JOIN check:</b> There are no JOINs, so focus on filters, calculations, and the source-table grain.');
+            add('<b>5. JOIN Check:</b> Inspect relationship cardinality to prevent duplicate record inflation.');
         }
-
         if (parsed.where) {
-            add('<b>6. Filter check:</b> WHERE removes rows before grouping. Check AND/OR precedence, NULL behavior, and whether the filter removes rows you intended to keep.');
-        } else {
-            add('<b>6. Filter check:</b> No WHERE clause is detected, so all source rows remain until a later stage changes the result.');
+            add('<b>6. Filter Check:</b> WHERE filters rows before grouping. Verify AND/OR precedence and NULL handling.');
         }
-
         if (hasAggregation) {
-            add('<b>7. Calculation check:</b> Validate COUNT, SUM, AVG, CASE, and NULL handling. Confirm that joins have not inflated the values before aggregation.');
-        } else {
-            add('<b>7. Calculation check:</b> No obvious aggregate is detected. Check selected expressions and whether they match the intended row-level meaning.');
+            add('<b>7. Calculations:</b> Verify aggregate functions (COUNT, SUM, AVG) at the grouped grain.');
         }
-
-        add(`<b>8. Aggregation check:</b> ${parsed.groupBy ? `Verify that <code>${escapeXml(parsed.groupBy)}</code> is the correct grouping level.` : hasAggregation ? 'Confirm the aggregate is calculated at the intended level; missing GROUP BY may produce one overall result.' : 'No GROUP BY is detected, so there is no explicit grouping stage.'}`);
-
-        add(`<b>9. Final output:</b> Confirm the columns, row count, and grain answer the original question. A query running successfully does not prove the result is trustworthy.`);
     }
 
     if (hasAndOrBug) {
-        add('🚨 <b>Logic warning:</b> AND runs before OR. Use parentheses or IN() so the filter matches your actual intention.');
+        add('🚨 <b>Logic Warning:</b> AND runs before OR. Use parentheses to ensure correct filter scope.');
     }
-
     if (hasLeftJoinBug) {
-        add('🚨 <b>LEFT JOIN warning:</b> A right-table condition in WHERE can remove NULL matches and make the LEFT JOIN behave like an INNER JOIN.');
+        add('🚨 <b>LEFT JOIN Warning:</b> WHERE clause condition converts LEFT JOIN to INNER JOIN.');
     }
 
-    const finalLines = lines.slice(0, 10);
-    let html = '<ol class="space-y-1.5 list-none p-0 m-0 text-xs">';
-
-    finalLines.forEach(line => {
+    let html = '<ol class="space-y-2 list-none p-0 m-0 text-xs">';
+    lines.forEach(line => {
         html += `
-        <li class="flex items-start gap-2 bg-forest-950/40 p-2 rounded border border-earth-borderDark/40">
-        <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 flex-shrink-0"></span>
-        <div class="leading-relaxed text-forest-200">${line}</div>
-        </li>
+            <li class="flex items-start gap-2.5 bg-emerald-950/20 p-2.5 rounded-xl border border-emerald-500/10">
+                <span class="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 mt-1.5 flex-shrink-0"></span>
+                <div class="leading-relaxed text-slate-300">${line}</div>
+            </li>
         `;
     });
-
     html += '</ol>';
+
     container.innerHTML = html;
 }
 
 /**
- * 7. Optimization Suggestions & Refined Query Render
+ * 7. Optimization Suggestions Render
  */
 function renderOptimizations(parsed = {}, rawSql = '', errors = []) {
     const container = document.getElementById('optimizationContainer');
     if (!container) return;
 
-    let cleanSql = '';
-    let safeErrors = [];
-
-    if (typeof rawSql === 'string') {
-        cleanSql = rawSql.trim();
-        safeErrors = Array.isArray(errors) ? errors : [];
-    } else if (Array.isArray(rawSql)) {
-        safeErrors = rawSql;
-        cleanSql = (parsed && parsed.raw) ? String(parsed.raw) : '';
-    }
-
+    let cleanSql = typeof rawSql === 'string' ? rawSql.trim() : '';
+    const safeErrors = Array.isArray(errors) ? errors : [];
     const safeJoins = Array.isArray(parsed.joins) ? parsed.joins : [];
     const where = parsed.where || '';
     const groupBy = parsed.groupBy || '';
     const orderBy = parsed.orderBy || '';
     const tips = [];
 
-    const hasSyntaxError = safeErrors.some(
-        e => e && e.severity === 'SYNTAX_ERROR'
-    );
-
-    const hasAndOrTrap = safeErrors.some(
-        e => e && String(e.type || '').includes('AND/OR')
-    );
-
-    const hasLeftJoinTrap = safeErrors.some(
-        e => e && String(e.type || '').includes('LEFT JOIN')
-    );
+    const hasSyntaxError = safeErrors.some(e => e && e.severity === 'SYNTAX_ERROR');
+    const hasAndOrTrap = safeErrors.some(e => e && String(e.type || '').includes('AND/OR'));
+    const hasLeftJoinTrap = safeErrors.some(e => e && String(e.type || '').includes('LEFT JOIN'));
 
     const hasAggregation = Boolean(groupBy) || /\b(COUNT|SUM|AVG|MIN|MAX)\s*\(/i.test(cleanSql);
     const hasDistinct = /\bDISTINCT\b/i.test(cleanSql);
     const hasFunctionsOnFilters = Boolean(where) && /\b(LOWER|UPPER|DATE|YEAR|MONTH|CAST|CONVERT|COALESCE)\s*\(/i.test(where);
-    const hasOr = Boolean(where) && /\bOR\b/i.test(where);
 
-    const addTip = (type, title, detail) => {
-        tips.push({ type, title, detail });
-    };
+    const addTip = (type, title, detail) => tips.push({ type, title, detail });
 
     if (hasSyntaxError) {
-        addTip('correctness', 'Fix syntax before optimization', 'Correct syntax errors first. A query must run successfully before its execution plan and performance can be evaluated.');
+        addTip('correctness', 'Fix syntax before optimization', 'A query must run successfully before its performance can be evaluated.');
     } else {
         if (parsed.isSelectAll === true || /\bSELECT\s+\*/i.test(cleanSql)) {
-            addTip('performance', 'Avoid SELECT *', 'Select only the columns required. This can reduce data transfer, I/O, and row width.');
+            addTip('performance', 'Avoid SELECT *', 'Explicitly select required columns to decrease network transfer and memory overhead.');
         }
-
         if (hasFunctionsOnFilters) {
-            addTip('index', 'Review functions on filter columns', 'Functions on filtered columns can prevent ordinary index usage. Consider a sargable condition or an appropriate expression index.');
+            addTip('index', 'Functions on filtered columns', 'Functions applied to WHERE columns prevent standard index lookup (sargability).');
         }
-
-        if (hasOr) {
-            addTip('logic', 'Review OR conditions', 'Check whether OR affects selectivity or index usage. Confirm the execution plan before changing the logic.');
-        }
-
         if (safeJoins.length > 0) {
-            addTip('latency', 'Inspect JOIN cardinality', 'Check one-to-many and many-to-many relationships. Multiple matches can multiply rows and inflate aggregate results.');
+            addTip('latency', 'Inspect JOIN cardinality', 'Verify key relationships to avoid unintentional row multiplication.');
         }
-
-        if (where && safeJoins.length > 0) {
-            addTip('performance', 'Reduce unnecessary rows early', 'Filter data before expensive joins or aggregations when this preserves the intended result and JOIN semantics.');
-        }
-
         if (orderBy && !/\bLIMIT\b/i.test(cleanSql)) {
-            addTip('memory', 'Review unbounded sorting', 'ORDER BY without LIMIT may sort a large result set. Check whether all rows need to be returned.');
+            addTip('memory', 'Unbounded sorting', 'ORDER BY without LIMIT may perform expensive full sorts in memory.');
         }
-
-        if (hasAggregation) {
-            addTip('aggregation', 'Check aggregation grain', 'Validate GROUP BY, COUNT, SUM, and AVG. Ensure joins do not multiply rows before aggregation.');
-        }
-
         if (hasDistinct) {
-            addTip('aggregation', 'Review DISTINCT', 'DISTINCT may hide duplicate-producing joins and require additional sorting or hashing. Check the underlying grain first.');
+            addTip('aggregation', 'Review DISTINCT', 'DISTINCT requires sorting/hashing overhead. Verify if grain or JOIN design is the cause.');
         }
-
         if (hasAndOrTrap) {
-            addTip('correctness', 'Fix AND/OR precedence', 'Use parentheses or IN() to ensure the filter returns the intended rows before optimizing.');
+            addTip('correctness', 'Fix AND/OR precedence', 'Wrap OR conditions in parentheses for expected filter evaluation.');
         }
-
         if (hasLeftJoinTrap) {
-            addTip('correctness', 'Preserve LEFT JOIN behavior', 'A condition on the right table in WHERE can remove unmatched rows. Check whether the condition belongs in ON.');
-        }
-
-        if (where || safeJoins.length > 0 || orderBy) {
-            addTip('index', 'Check indexes using the execution plan', 'Review indexes on WHERE, JOIN, and ORDER BY columns. Do not add indexes blindly; compare the actual execution plan and write overhead.');
+            addTip('correctness', 'Preserve LEFT JOIN behavior', 'Move right-table WHERE filter conditions to the JOIN ON clause.');
         }
     }
 
-    // Format query
     let refinedQuery = cleanSql;
     if (refinedQuery) {
         refinedQuery = refinedQuery
@@ -624,65 +568,36 @@ function renderOptimizations(parsed = {}, rawSql = '', errors = []) {
     }
 
     let html = '';
-
     if (tips.length === 0) {
         html += `
-            <div class="p-3 rounded-lg bg-emerald-950/30 border border-emerald-700/40 text-xs text-emerald-300">
-                God Damn! Master! Why are you even here?
+            <div class="p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/30 text-xs text-emerald-300">
+                ✨ Excellent query structure! No obvious performance traps found.
             </div>
         `;
     } else {
-        if (tips.length > 3) {
-            html += `
-                <div class="mb-2 p-2.5 rounded-lg bg-amber-950/30 border border-amber-700/40 text-xs text-amber-300">
-                    Slow down, Kiddo let me show you how its done
-                </div>
-            `;
-        }
-
         html += '<div class="space-y-2">';
         tips.forEach(tip => {
-            let badgeClass = 'bg-emerald-900/40 text-emerald-300 border-emerald-700/50';
-
-            if (tip.type === 'performance' || tip.type === 'index') {
-                badgeClass = 'bg-amber-900/40 text-amber-300 border-amber-700/50';
-            }
-            if (tip.type === 'memory' || tip.type === 'latency') {
-                badgeClass = 'bg-sky-900/40 text-sky-300 border-sky-700/50';
-            }
-            if (tip.type === 'correctness' || tip.type === 'logic') {
-                badgeClass = 'bg-red-900/40 text-red-300 border-red-700/50';
-            }
+            let badgeClass = 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40';
+            if (tip.type === 'performance' || tip.type === 'index') badgeClass = 'bg-amber-950/80 text-amber-300 border-amber-500/40';
+            if (tip.type === 'correctness') badgeClass = 'bg-red-950/80 text-red-300 border-red-500/40';
 
             html += `
-                <div class="p-2.5 rounded-lg bg-forest-950/40 border border-earth-borderDark/50 flex flex-col gap-1">
+                <div class="p-3 rounded-xl bg-black/40 border border-emerald-500/10 flex flex-col gap-1">
                     <div class="flex items-center justify-between">
-                        <span class="font-semibold text-earth-textDark text-xs">
-                            ${escapeXml(tip.title)}
-                        </span>
-                        <span class="text-[10px] font-mono px-1.5 py-0.5 rounded border ${badgeClass}">
-                            ${tip.type.toUpperCase()}
-                        </span>
+                        <span class="font-semibold text-white text-xs">${escapeXml(tip.title)}</span>
+                        <span class="text-[10px] font-mono px-2 py-0.5 rounded-full border ${badgeClass}">${tip.type.toUpperCase()}</span>
                     </div>
-                    <p class="text-forest-300/90 text-xs">
-                        ${escapeXml(tip.detail)}
-                    </p>
+                    <p class="text-slate-300/80 text-xs leading-relaxed">${escapeXml(tip.detail)}</p>
                 </div>
             `;
         });
         html += '</div>';
     }
 
-    // Render formatted SQL output block
     html += `
-        <div class="mt-3 p-3 rounded-lg bg-forest-950/50 border border-earth-borderDark/50">
-            <div class="text-xs font-semibold text-earth-textDark mb-2">
-                Refined Query
-            </div>
-            <pre class="text-xs text-emerald-300 font-mono whitespace-pre-wrap overflow-x-auto bg-black/30 p-2.5 rounded border border-earth-borderDark/40">${escapeXml(refinedQuery || cleanSql)}</pre>
-            <div class="text-[10px] text-forest-400 mt-2">
-                Formatted only — not execution-tested.
-            </div>
+        <div class="mt-3 p-3 rounded-xl bg-black/50 border border-emerald-500/20">
+            <div class="text-xs font-semibold text-emerald-300 mb-1.5">Refined Query</div>
+            <pre class="text-xs text-emerald-200 font-mono whitespace-pre-wrap overflow-x-auto bg-black/40 p-3 rounded-lg border border-white/5">${escapeXml(refinedQuery || cleanSql)}</pre>
         </div>
     `;
 
@@ -690,7 +605,7 @@ function renderOptimizations(parsed = {}, rawSql = '', errors = []) {
 }
 
 /**
- * Utility: Export SVG Visual Flow as PNG Image
+ * 8. Export PNG
  */
 function exportVisualAsPNG() {
     const svgElem = document.getElementById('sqlFlowSvg');
@@ -701,7 +616,6 @@ function exportVisualAsPNG() {
 
     const serializer = new XMLSerializer();
     let svgString = serializer.serializeToString(svgElem);
-
     if (!svgString.match(/^<svg[^>]+xmlns="http\:\/\/www\.w3\.org\/2000\/svg"/)) {
         svgString = svgString.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
     }
@@ -721,7 +635,7 @@ function exportVisualAsPNG() {
         const ctx = canvas.getContext('2d');
         ctx.scale(2, 2);
 
-        ctx.fillStyle = '#0D140D';
+        ctx.fillStyle = '#050d08';
         ctx.fillRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0);
 
@@ -737,4 +651,229 @@ function exportVisualAsPNG() {
     };
 
     img.src = blobURL;
+}
+
+/**
+ * 9. HISTORY FEATURE (localStorage)
+ */
+function saveToHistory(sql, status, summary) {
+    const historyItem = {
+        id: Date.now(),
+        sql: sql,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        date: new Date().toLocaleDateString(),
+        status: status,
+        summary: summary
+    };
+
+    // Filter duplicates
+    analysisHistory = analysisHistory.filter(item => item.sql !== sql);
+    analysisHistory.unshift(historyItem);
+
+    if (analysisHistory.length > 20) analysisHistory.pop();
+
+    try {
+        localStorage.setItem('querylens_history', JSON.stringify(analysisHistory));
+    } catch (e) {}
+
+    renderHistoryUI();
+}
+
+function loadHistory() {
+    try {
+        const stored = localStorage.getItem('querylens_history');
+        if (stored) {
+            analysisHistory = JSON.parse(stored);
+        }
+    } catch (e) {
+        analysisHistory = [];
+    }
+    renderHistoryUI();
+}
+
+function renderHistoryUI() {
+    const container = document.getElementById('historyContainer');
+    if (!container) return;
+
+    if (analysisHistory.length === 0) {
+        container.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">No query history stored yet.</p>`;
+        return;
+    }
+
+    let html = '';
+    analysisHistory.forEach((item, index) => {
+        let statusBadge = item.status === 'error' 
+            ? 'bg-red-950/80 text-red-300 border-red-500/40' 
+            : item.status === 'warning' 
+            ? 'bg-amber-950/80 text-amber-300 border-amber-500/40' 
+            : 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40';
+
+        html += `
+            <div class="p-3.5 rounded-2xl bg-black/40 border border-emerald-500/15 flex flex-col gap-2 hover:border-emerald-500/30 transition-all">
+                <div class="flex items-center justify-between">
+                    <span class="text-[11px] text-slate-400">${item.date} at ${item.timestamp}</span>
+                    <span class="text-[10px] font-mono px-2 py-0.5 rounded-full border ${statusBadge}">${item.summary}</span>
+                </div>
+                <pre class="text-xs text-emerald-300 font-mono whitespace-pre-wrap line-clamp-2 bg-black/30 p-2 rounded-lg border border-white/5">${escapeXml(item.sql)}</pre>
+                <div class="flex items-center justify-end gap-2 pt-1">
+                    <button onclick="deleteHistoryItem(${item.id})" class="text-xs text-slate-400 hover:text-red-400 px-2 py-1">Delete</button>
+                    <button onclick="loadQueryFromHistory(${index})" class="text-xs text-emerald-400 hover:text-emerald-300 font-medium px-3 py-1 rounded-lg bg-emerald-950/60 border border-emerald-500/30">Load Query →</button>
+                </div>
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
+function loadQueryFromHistory(index) {
+    const item = analysisHistory[index];
+    if (item) {
+        const inputElem = document.getElementById('sqlInput');
+        if (inputElem) {
+            inputElem.value = item.sql;
+            closeOverlay('historyModal');
+            processQuery();
+        }
+    }
+}
+
+function deleteHistoryItem(id) {
+    analysisHistory = analysisHistory.filter(i => i.id !== id);
+    try {
+        localStorage.setItem('querylens_history', JSON.stringify(analysisHistory));
+    } catch (e) {}
+    renderHistoryUI();
+}
+
+function clearHistory() {
+    if (confirm("Are you sure you want to clear all analysis history?")) {
+        analysisHistory = [];
+        try {
+            localStorage.removeItem('querylens_history');
+        } catch (e) {}
+        renderHistoryUI();
+    }
+}
+
+/**
+ * 10. EXAMPLES FEATURE
+ */
+const SQL_EXAMPLES = [
+    {
+        category: 'LOGIC TRAPS',
+        title: 'LEFT JOIN + WHERE Filter Trap',
+        desc: 'Filtering a LEFT JOINed table in WHERE converts it into an INNER JOIN by dropping NULL rows.',
+        sql: `SELECT o.order_id, c.customer_name\nFROM orders o\nLEFT JOIN customers c ON o.customer_id = c.id\nWHERE c.status = 'active';`
+    },
+    {
+        category: 'LOGIC TRAPS',
+        title: 'AND / OR Operator Precedence',
+        desc: 'AND has higher precedence than OR. Unparenthesized conditions produce unexpected filter matches.',
+        sql: `SELECT * FROM products\nWHERE category = 'Electronics' OR category = 'Gadgets'\nAND price < 100;`
+    },
+    {
+        category: 'BASIC',
+        title: 'Simple SELECT & Filter',
+        desc: 'Standard query with simple WHERE filtering.',
+        sql: `SELECT id, username, email\nFROM users\nWHERE status = 'active'\nORDER BY created_at DESC;`
+    },
+    {
+        category: 'JOINS & GRAIN',
+        title: 'Multiple JOINs with Aggregation',
+        desc: 'GROUP BY aggregation across joined tables.',
+        sql: `SELECT u.id, u.username, COUNT(o.id) as total_orders\nFROM users u\nINNER JOIN orders o ON u.id = o.user_id\nGROUP BY u.id, u.username\nHAVING count(o.id) > 5;`
+    },
+    {
+        category: 'OPTIMIZATION',
+        title: 'Function Applied on Filter Column',
+        desc: 'Using functions on WHERE columns prevents index usage.',
+        sql: `SELECT * FROM employees\nWHERE LOWER(last_name) = 'smith';`
+    }
+];
+
+function initExamples() {
+    const container = document.getElementById('examplesContainer');
+    if (!container) return;
+
+    let html = '';
+    SQL_EXAMPLES.forEach((ex, idx) => {
+        html += `
+            <div class="p-4 rounded-2xl bg-black/40 border border-emerald-500/15 flex flex-col gap-2 hover:border-emerald-500/30 transition-all">
+                <div class="flex items-center justify-between">
+                    <h4 class="text-sm font-semibold text-white">${escapeXml(ex.title)}</h4>
+                    <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-950/80 text-emerald-300 border border-emerald-500/30">${ex.category}</span>
+                </div>
+                <p class="text-xs text-slate-300/80 leading-relaxed">${escapeXml(ex.desc)}</p>
+                <pre class="text-xs text-emerald-300 font-mono bg-black/40 p-2.5 rounded-lg border border-white/5 whitespace-pre-wrap">${escapeXml(ex.sql)}</pre>
+                <div class="flex justify-end pt-1">
+                    <button onclick="loadExampleQuery(${idx})" class="text-xs text-emerald-400 hover:text-emerald-300 font-medium px-4 py-1.5 rounded-xl bg-emerald-950/80 border border-emerald-500/30 transition-all">
+                        Load Example →
+                    </button>
+                </div>
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
+function loadExampleQuery(idx) {
+    const example = SQL_EXAMPLES[idx];
+    if (example) {
+        const inputElem = document.getElementById('sqlInput');
+        if (inputElem) {
+            inputElem.value = example.sql;
+            closeOverlay('examplesModal');
+            processQuery();
+        }
+    }
+}
+
+/**
+ * Overlay Controls
+ */
+function openOverlay(id) {
+    const modal = document.getElementById(id);
+    if (modal) modal.classList.remove('hidden');
+}
+
+function closeOverlay(id) {
+    const modal = document.getElementById(id);
+    if (modal) modal.classList.add('hidden');
+}
+
+function switchTab(tabName) {
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    if (tabName === 'home') {
+        const navHome = document.getElementById('navHome');
+        if (navHome) navHome.classList.add('active');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+}
+
+/**
+ * Proximity / Magnetic Micro-Interactions
+ */
+function setupProximityInteractions() {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    const cards = document.querySelectorAll('.magnetic-card');
+
+    cards.forEach(card => {
+        card.addEventListener('mousemove', (e) => {
+            const rect = card.getBoundingClientRect();
+            const x = e.clientX - rect.left - rect.width / 2;
+            const y = e.clientY - rect.top - rect.height / 2;
+
+            const moveX = (x / rect.width) * 6;
+            const moveY = (y / rect.height) * 6;
+
+            card.style.transform = `translate3d(${moveX}px, ${moveY}px, 0)`;
+        });
+
+        card.addEventListener('mouseleave', () => {
+            card.style.transform = 'translate3d(0, 0, 0)';
+        });
+    });
 }
