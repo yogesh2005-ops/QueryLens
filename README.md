@@ -15,7 +15,7 @@ It's easy to write a query.
 
 It's significantly harder to visualize how the database processes:
 
-`FROM → WHERE → GROUP BY → HAVING → SELECT`
+`FROM → JOIN → WHERE → GROUP BY → HAVING → SELECT → ORDER BY → LIMIT`
 
 ...or spot subtle logic traps before they break something in production.
 
